@@ -2,6 +2,6 @@
     "webhookId" : "877555481013542973",
     "webhookToken" : "2VofjfiZCt_rYq8NjOW0xYRR01zKGmOvnzIcfWb-SICiss3MWquQx4ZXU-YyVezZKy1n",
     "botToken" : "",
-    "galleryAddress" : "https://gall.dcinside.com/mgallery/board/lists?id=granvs",
+    "galleryAddress" : "https://gall.dcinside.com/mgallery/board/lists?id=granvs&numbers=100",
     "baseAddress" : "https://gall.dcinside.com"
 }

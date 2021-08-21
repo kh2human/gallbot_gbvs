@@ -11,21 +11,43 @@ function loadRecentPostTime() {
         var recent = JSON.parse(f)
         return recent.recentTime
     } catch ( err ) {
-        console.error(err)
+        console.error(err);
+		return 0;
     }
 }
-function saveRecentPostTime(time) {
-    var inputs = { 
-        recentTime: time
+
+function loadRecent() {
+    try {
+        if( !fs.existsSync('./recent.json')) return 
+        let f = fs.readFileSync('./recent.json','utf8')
+        var recent = JSON.parse(f)
+        return recent
+    } catch ( err ) {
+        console.error(err);
+		return {};
     }
-    fs.writeFileSync('./recent.json', JSON.stringify(inputs) )
+}
+
+function saveRecentPostTime(time, no) {
+    var inputs = { 
+        recentPostTime: time, 
+		bbsNo : no, 
+    }
+    //fs.writeFileSync('./recent.json', JSON.stringify(inputs) )
+	fs.writeFile('./recent.json', JSON.stringify(inputs), (err) => {
+		if (err) {
+			console.error(err);
+		}
+	})
 }
 
 module.exports = class GallBot {
     constructor( _minorBot, _address ) {
         this.minorBot = _minorBot
         this.address = _address
-        this.recentPostTime = loadRecentPostTime() || ( new Date().getTime() )
+		var recent = loadRecent();
+        this.recentPostTime = recent.recentPostTime || ( new Date().getTime() )
+		this.bbsNo = recent.bbsNo || 0;
     }
     async getHtml() {
         try {
@@ -41,7 +63,8 @@ module.exports = class GallBot {
     }
 
     loopCrawling() {
-        console.log("Crawling Start! " + this.recentPostTime)
+		var restartAfterSec = 30;
+        console.log("Crawling Start! " + this.recentPostTime + " no." + this.bbsNo);
         this.getHtml().then( html => {
             let indexCount = 0;
             let ulList = [];
@@ -66,42 +89,45 @@ module.exports = class GallBot {
                         link: $(this).find("td.gall_tit > a").attr("href"),
                         date: Date.parse($(this).find("td.gall_date").attr("title")),
                         dateString: $(this).find("td.gall_date").attr("title"),
+						no : $(this).find("td.gall_num").text(), 
                     }
                     ulList.push(part)
                 }
             });
             return ulList;
         }).then(res => {
-            var sec = 30
             console.log("Crawling Done!")
-            // 시간 순대로 정렬 ( 가장 최근 순 )
-            res.sort((a, b) => b.date - a.date)
+            // 시간 순대로 정렬 ( 오래된 것이 먼저, 최근 것이 나중에 )
+            res.sort((a, b) => a.date - b.date)
             // 봇이 마지막으로 뿌린 시점부터 그 이후에 들어온 게시글 체크        
-            const filtered = res.filter(it => it.date > this.recentPostTime)
-    
-            // 없으면 다시 돌아가서 크롤링
-            if (filtered.length === 0) {
-                setTimeout(this.loopCrawling.bind(this), sec * 1000)
-                return
+            const filtered = res.filter(it => it.date > this.recentPostTime && it.no > this.bbsNo);
+			console.log(filtered.length + "건 확인");
+            if (filtered.length > 0) {
                 // 있다면 해당 메시지를 디스코드에 post
-            } else {
-                console.log(filtered)
-                console.log("최근 타임 : " + filtered[0].date + " String:" + filtered[0].dateString)
-                console.log("Process will restart in " + sec + "seconds")
+				var LATEST = filtered.length - 1;
+                console.log(filtered);
+                console.log("최근 타임 : " + filtered[LATEST].date + " String:" + filtered[LATEST].dateString);
                 // 시점 갱신
-                this.recentPostTime = filtered[0].date
-                saveRecentPostTime(this.recentPostTime)
+                this.recentPostTime = filtered[LATEST].date
+                saveRecentPostTime(this.recentPostTime, filtered[LATEST].no)
                 // 돌면서 메시지를 전송
                 filtered.forEach(item => this.sendBotMessage(item))
-                setTimeout(this.loopCrawling.bind(this), sec * 1000)
             }
+			// 지정 시간 후 크롤링
+			restartAfterSec = 30;
+//			console.log("Process will restart in " + sec + "seconds");
+//			setTimeout(this.loopCrawling.bind(this), sec * 1000)
         }).catch(err => {
             // 에러발생시 재실행
-            var sec = 10
-            console.log(err)
-            console.log("Process will restart in " + sec + "seconds")
-            setTimeout(this.loopCrawling.bind(this), 10000)
-        })
+            //var sec = 10
+			console.log(err)
+            restartAfterSec = 10;
+//			console.log("Process will restart in " + sec + "seconds")
+//          setTimeout(this.loopCrawling.bind(this), sec * 1000)
+        }).finally(() => {
+			console.log("Process will restart in " + restartAfterSec + "seconds")
+            setTimeout(this.loopCrawling.bind(this), restartAfterSec * 1000)
+		});
     }
 }
 
