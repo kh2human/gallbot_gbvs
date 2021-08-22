@@ -21,7 +21,7 @@ const GallBot = require('./gallbot'); // 마갤용 웹훅 봇
 //gusoon.launchGusoon();
 
 
-var gallBot = new GallBot(minorBot, config.galleryAddress)
+var gallBot = GallBot.getInstance(minorBot, config.galleryAddress)
 gallBot.loopCrawling(); // 크롤링 이후 웹훅에 쏘는 로직
 
 

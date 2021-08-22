@@ -33,7 +33,6 @@ function saveRecentPostTime(time, no) {
         recentPostTime: time, 
 		bbsNo : no, 
     }
-    //fs.writeFileSync('./recent.json', JSON.stringify(inputs) )
 	fs.writeFile('./recent.json', JSON.stringify(inputs), (err) => {
 		if (err) {
 			console.error(err);
@@ -42,13 +41,25 @@ function saveRecentPostTime(time, no) {
 }
 
 module.exports = class GallBot {
-    constructor( _minorBot, _address ) {
+    static _this = null;
+	static constructs = 0;
+	
+	constructor( _minorBot, _address ) {
         this.minorBot = _minorBot
         this.address = _address
 		var recent = loadRecent();
         this.recentPostTime = recent.recentPostTime || ( new Date().getTime() )
 		this.bbsNo = recent.bbsNo || 0;
+		++this.constructor.constructs;
     }
+	
+	static getInstance(_minorBot, _address) {
+		if (this._this === null) {
+			this._this = new GallBot(_minorBot, _address);
+		}
+		return this._this;
+	}
+	
     async getHtml() {
         try {
             return await axios.get(this.address)
@@ -64,6 +75,7 @@ module.exports = class GallBot {
 
     loopCrawling() {
 		var restartAfterSec = 30;
+		console.log(this.constructor.constructs + "th GallBot is running.");
         console.log("Crawling Start! " + this.recentPostTime + " no." + this.bbsNo);
         this.getHtml().then( html => {
             let indexCount = 0;
@@ -100,7 +112,7 @@ module.exports = class GallBot {
             // 시간 순대로 정렬 ( 오래된 것이 먼저, 최근 것이 나중에 )
             res.sort((a, b) => a.date - b.date)
             // 봇이 마지막으로 뿌린 시점부터 그 이후에 들어온 게시글 체크        
-            const filtered = res.filter(it => it.date > this.recentPostTime && it.no > this.bbsNo);
+            const filtered = res.filter((it, index, arr) => this.bbsNo > 0 ? it.date > this.recentPostTime && it.no > this.bbsNo : index === arr.length - 1);
 			console.log(filtered.length + "건 확인");
             if (filtered.length > 0) {
                 // 있다면 해당 메시지를 디스코드에 post
@@ -109,21 +121,18 @@ module.exports = class GallBot {
                 console.log("최근 타임 : " + filtered[LATEST].date + " String:" + filtered[LATEST].dateString);
                 // 시점 갱신
                 this.recentPostTime = filtered[LATEST].date
-                saveRecentPostTime(this.recentPostTime, filtered[LATEST].no)
+				this.bbsNo = filtered[LATEST].no;
+                saveRecentPostTime(this.recentPostTime, this.bbsNo);
                 // 돌면서 메시지를 전송
                 filtered.forEach(item => this.sendBotMessage(item))
             }
 			// 지정 시간 후 크롤링
 			restartAfterSec = 30;
-//			console.log("Process will restart in " + sec + "seconds");
-//			setTimeout(this.loopCrawling.bind(this), sec * 1000)
         }).catch(err => {
             // 에러발생시 재실행
             //var sec = 10
 			console.log(err)
             restartAfterSec = 10;
-//			console.log("Process will restart in " + sec + "seconds")
-//          setTimeout(this.loopCrawling.bind(this), sec * 1000)
         }).finally(() => {
 			console.log("Process will restart in " + restartAfterSec + "seconds")
             setTimeout(this.loopCrawling.bind(this), restartAfterSec * 1000)
